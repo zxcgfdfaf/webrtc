@@ -64,7 +64,6 @@ class VideoConference {
         document.getElementById('toggleAudioBtn').addEventListener('click', () => this.toggleAudio());
     }
 
-    // Setup global click handlers that work even after DOM changes
     setupGlobalClickHandlers() {
         document.body.addEventListener('click', (e) => {
             if (!this.isSwapMode) return;
@@ -81,7 +80,6 @@ class VideoConference {
         });
     }
 
-    // Update UI based on page type
     updateUIForPageType() {
         const header = document.querySelector('h1');
         const controls = document.getElementById('mediaControls');
@@ -105,7 +103,223 @@ class VideoConference {
         }
     }
 
-    // Handle video grid clicks during swap mode
+    // НОВАЯ ФУНКЦИЯ: Открыть видео в чистом окне
+    openVideoInCleanWindow(videoElement, title = "Video") {
+        if (!videoElement || !videoElement.srcObject) {
+            console.error("❌ No video stream available");
+            return;
+        }
+
+        const features = `
+            width=${window.screen.width},
+            height=${window.screen.height},
+            left=0,
+            top=0,
+            menubar=no,
+            toolbar=no,
+            location=no,
+            status=no,
+            resizable=yes,
+            scrollbars=no
+        `;
+        
+        const newWindow = window.open('', '_blank', features);
+
+        if (!newWindow) {
+            alert("❌ Браузер заблокировал pop-up! Разрешите открытие окон для этого сайта.");
+            return;
+        }
+
+        try {
+            newWindow.document.title = title;
+            newWindow.document.body.style.margin = "0";
+            newWindow.document.body.style.padding = "0";
+            newWindow.document.body.style.background = "black";
+            newWindow.document.body.style.overflow = "hidden";
+
+            const vid = newWindow.document.createElement("video");
+            vid.autoplay = true;
+            vid.playsInline = true;
+            vid.controls = true;
+            vid.style.cssText = `
+                width: 100vw;
+                height: 100vh;
+                object-fit: contain;
+                background: black;
+                position: fixed;
+                top: 0;
+                left: 0;
+                margin: 0;
+                padding: 0;
+            `;
+
+            vid.srcObject = videoElement.srcObject;
+
+            newWindow.document.body.appendChild(vid);
+
+            const closeBtn = newWindow.document.createElement("button");
+            closeBtn.textContent = "✕";
+            closeBtn.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.7);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+                cursor: pointer;
+                z-index: 1000;
+            `;
+            closeBtn.onclick = () => newWindow.close();
+            newWindow.document.body.appendChild(closeBtn);
+
+            newWindow.onbeforeunload = () => {
+                console.log("✅ Fullscreen video window closed");
+            };
+
+            console.log("✅ Video opened in fullscreen window");
+
+        } catch (err) {
+            console.error("❌ Error opening video window:", err);
+            newWindow.close();
+        }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Открыть локальную вебку в отдельном окне
+    openLocalWebcamInNewWindow() {
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo && localVideo.srcObject) {
+            this.openVideoInCleanWindow(localVideo, "My Webcam");
+        } else {
+            alert("❌ Local webcam not available");
+        }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Открыть удаленную вебку в отдельном окне
+    openRemoteWebcamInNewWindow(socketId) {
+        const remoteVideo = document.querySelector(`#user-${socketId} video`);
+        if (remoteVideo && remoteVideo.srcObject) {
+            const userState = this.userStates.get(socketId);
+            const title = userState ? `${userState.name}'s Webcam` : "Remote Webcam";
+            this.openVideoInCleanWindow(remoteVideo, title);
+        } else {
+            alert("❌ Remote webcam not available");
+        }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Открыть демонстрацию экрана в отдельном окне
+    openScreenShareInNewWindow(producerId) {
+        const screenVideo = document.querySelector(`#presentation-${producerId} video`);
+        if (screenVideo && screenVideo.srcObject) {
+            const presentation = this.presentations.get(producerId);
+            const title = presentation ? `${presentation.peerName}'s Screen` : "Screen Share";
+            this.openVideoInCleanWindow(screenVideo, title);
+        } else {
+            alert("❌ Screen share not available");
+        }
+    }
+
+    // ОБНОВЛЯЕМ ФУНКЦИЮ: Добавляем кнопки ко всем существующим элементам
+    addFullscreenButtonsToExistingElements() {
+        // Добавляем кнопку к локальному видео (если еще нет)
+        const localVideoWrapper = document.querySelector('.video-wrapper.self');
+        if (localVideoWrapper && !localVideoWrapper.querySelector('.fullscreen-btn')) {
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.className = 'fullscreen-btn';
+            fullscreenBtn.title = 'Open my webcam in fullscreen';
+            fullscreenBtn.textContent = '⛶';
+            fullscreenBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.7);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px;
+                cursor: pointer;
+                z-index: 10;
+            `;
+            fullscreenBtn.addEventListener('click', () => {
+                this.openLocalWebcamInNewWindow();
+            });
+            
+            localVideoWrapper.style.position = 'relative';
+            localVideoWrapper.appendChild(fullscreenBtn);
+        }
+
+        // Добавляем кнопки ко всем удаленным пользователям
+        this.userStates.forEach((user, socketId) => {
+            if (socketId !== this.socket.id) {
+                const userElement = document.getElementById(`user-${socketId}`);
+                if (userElement && !userElement.querySelector('.fullscreen-btn')) {
+                    const fullscreenBtn = document.createElement('button');
+                    fullscreenBtn.className = 'fullscreen-btn';
+                    fullscreenBtn.title = 'Open in fullscreen';
+                    fullscreenBtn.textContent = '⛶';
+                    fullscreenBtn.style.cssText = `
+                        background: rgba(0,0,0,0.7);
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        padding: 5px 8px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        margin-left: 5px;
+                    `;
+                    fullscreenBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.openRemoteWebcamInNewWindow(socketId);
+                    });
+
+                    const videoHeader = userElement.querySelector('.video-header');
+                    if (videoHeader) {
+                        videoHeader.appendChild(fullscreenBtn);
+                    }
+                }
+            }
+        });
+
+        // Добавляем кнопки ко всем демонстрациям экрана
+        this.presentations.forEach((presentation, producerId) => {
+            const presentationElement = document.getElementById(`presentation-${producerId}`);
+            if (presentationElement && !presentationElement.querySelector('.fullscreen-btn')) {
+                const fullscreenBtn = document.createElement('button');
+                fullscreenBtn.className = 'fullscreen-btn';
+                fullscreenBtn.title = 'Open in fullscreen';
+                fullscreenBtn.textContent = '⛶';
+                fullscreenBtn.style.cssText = `
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 5px 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    margin-left: 5px;
+                `;
+                fullscreenBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.openScreenShareInNewWindow(producerId);
+                });
+
+                const videoHeader = presentationElement.querySelector('.video-header');
+                if (videoHeader) {
+                    videoHeader.appendChild(fullscreenBtn);
+                }
+            }
+        });
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Принудительное обновление кнопок (можно вызвать из консоли)
+    refreshFullscreenButtons() {
+        this.addFullscreenButtonsToExistingElements();
+        console.log("✅ Fullscreen buttons refreshed");
+    }
+
     handleVideoGridClick(videoWrapper) {
         if (!this.isSwapMode || !this.swapSource) return;
 
@@ -138,7 +352,6 @@ class VideoConference {
         }
     }
 
-    // Enhanced Video Switcher Methods
     initializeVideoSwitcher() {
         this.videoSwitcher = document.getElementById('videoSwitcher');
         this.videoSwitcherList = document.getElementById('videoSwitcherList');
@@ -192,17 +405,14 @@ class VideoConference {
     updateVideoSwitcherList() {
         this.videoSwitcherList.innerHTML = '';
 
-        // Add local video
         this.addSwitcherItem('local', 'Your Camera', 'camera', 'scr' + this.myUserIndex);
 
-        // Add user videos
         this.userStates.forEach((user, socketId) => {
             if (socketId !== this.socket.id) {
                 this.addSwitcherItem(`user-${socketId}`, `${user.name}`, 'user', 'scr' + user.userIndex);
             }
         });
 
-        // Add presentations
         this.presentations.forEach((presentation, producerId) => {
             const isOwn = presentation.socketId === this.socket.id;
             const name = isOwn ? 'Your Screen Share' : `${presentation.peerName}'s Screen`;
@@ -292,25 +502,18 @@ class VideoConference {
         }
     }
 
-    // Find video container by screen ID
     findVideoContainerByScreen(screenId) {
         const videoWrappers = document.querySelectorAll('.video-wrapper');
-        
-        console.log(`🔍 Searching for container with screen: ${screenId}`);
-        console.log(`🔍 Total video wrappers: ${videoWrappers.length}`);
         
         for (const wrapper of videoWrappers) {
             const screenNumberEl = wrapper.querySelector('.screen-number');
             if (screenNumberEl) {
-                console.log(`🔍 Checking wrapper: ${wrapper.id || 'no-id'} with screen: ${screenNumberEl.textContent}`);
                 if (screenNumberEl.textContent === screenId) {
-                    console.log(`✅ Found container for ${screenId}: ${wrapper.id || 'no-id'}`);
                     return wrapper;
                 }
             }
         }
         
-        console.log(`❌ No container found for screen: ${screenId}`);
         return null;
     }
 
@@ -326,7 +529,6 @@ class VideoConference {
             
             console.log('✅ Swap mode activated - click any video in the grid to swap');
             
-            // Add visual indicator to all clickable videos
             this.enableSwapModeVisuals();
         } else {
             this.swapTarget = { id: sourceId, screen: screenId };
@@ -335,7 +537,6 @@ class VideoConference {
         }
     }
 
-    // Enable visual indicators for swap mode
     enableSwapModeVisuals() {
         const allWrappers = document.querySelectorAll('.video-wrapper:not(.swap-source)');
         allWrappers.forEach(wrapper => {
@@ -347,7 +548,6 @@ class VideoConference {
         document.body.classList.add('swap-mode');
     }
 
-    // Disable swap mode visuals
     disableSwapModeVisuals() {
         const allWrappers = document.querySelectorAll('.video-wrapper');
         allWrappers.forEach(wrapper => {
@@ -422,8 +622,6 @@ class VideoConference {
 
         if (!sourceContainer || !targetContainer) {
             console.error('Cannot perform swap: containers not found');
-            console.error(`Source container: ${this.swapSource.screen} - ${sourceContainer ? 'found' : 'not found'}`);
-            console.error(`Target container: ${this.swapTarget.screen} - ${targetContainer ? 'found' : 'not found'}`);
             this.cancelSwap();
             return;
         }
@@ -545,9 +743,7 @@ class VideoConference {
 
             console.log("🎥 Requesting user media...");
             
-            // Different media constraints based on page type
             if (this.isScreenPage) {
-                // For screen page, only request audio by default
                 this.localStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         echoCancellation: true,
@@ -556,7 +752,6 @@ class VideoConference {
                     }
                 });
             } else {
-                // For webcam pages, request both video and audio
                 this.localStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         width: { ideal: 1280 },
@@ -633,7 +828,33 @@ class VideoConference {
         localVideo.muted = true;
         localVideo.playsInline = true;
         
-        // Hide video element if no video track (screen page)
+        // Добавляем кнопку полноэкранного режима для локального видео
+        const localVideoWrapper = document.querySelector('.video-wrapper.self');
+        if (localVideoWrapper && !localVideoWrapper.querySelector('.fullscreen-btn')) {
+            const fullscreenBtn = document.createElement('button');
+            fullscreenBtn.className = 'fullscreen-btn';
+            fullscreenBtn.title = 'Open my webcam in fullscreen';
+            fullscreenBtn.textContent = '⛶';
+            fullscreenBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.7);
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px;
+                cursor: pointer;
+                z-index: 10;
+            `;
+            fullscreenBtn.addEventListener('click', () => {
+                this.openLocalWebcamInNewWindow();
+            });
+            
+            localVideoWrapper.style.position = 'relative';
+            localVideoWrapper.appendChild(fullscreenBtn);
+        }
+        
         if (this.isScreenPage && !this.localStream.getVideoTracks().length) {
             localVideo.style.display = 'none';
         }
@@ -648,7 +869,7 @@ class VideoConference {
                 body: JSON.stringify({
                     socketId: this.socket.id,
                     direction: 'send',
-                    roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                    roomType: this.pageType
                 })
             });
 
@@ -662,7 +883,7 @@ class VideoConference {
                         body: JSON.stringify({
                             transportId: this.producerTransport.id,
                             dtlsParameters,
-                            roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                            roomType: this.pageType
                         })
                     });
                     console.log("✅ Producer transport connected");
@@ -684,7 +905,7 @@ class VideoConference {
                             rtpParameters,
                             socketId: this.socket.id,
                             source: this.isSharingScreen ? 'screen' : 'camera',
-                            roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                            roomType: this.pageType
                         })
                     });
                     console.log(`✅ Produced ${kind} track: ${id}`);
@@ -723,7 +944,6 @@ class VideoConference {
                 console.log("✅ Produced camera audio");
             }
 
-            // Only produce video if we have a video track (not on screen page)
             const videoTrack = this.localStream.getVideoTracks()[0];
             if (videoTrack) {
                 const producer = await this.producerTransport.produce({ track: videoTrack });
@@ -834,6 +1054,11 @@ class VideoConference {
             });
 
             console.log(`📦 Buffered ${this.pendingProducers.length} producers and ${this.pendingPresentations.length} presentations`);
+
+            // ДОБАВЛЯЕМ: Добавляем кнопки после инициализации
+            setTimeout(() => {
+                this.addFullscreenButtonsToExistingElements();
+            }, 500);
         });
 
         this.socket.on('user-joined', (data) => {
@@ -872,6 +1097,25 @@ class VideoConference {
             console.log('📺 Received presentation-ended event:', data);
             this.removePresentation(data.producerId);
         });
+    }
+
+    // ОБНОВЛЯЕМ ФУНКЦИЮ: Добавляем вызов при получении новых пользователей
+    addUser(socketId, name, userIndex, videoEnabled = true, audioEnabled = true) {
+        if (socketId === this.socket.id) return;
+
+        this.userStates.set(socketId, { name, userIndex, videoEnabled, audioEnabled });
+        console.log(`👤 User joined: ${name} (scr${userIndex})`);
+
+        // Добавляем кнопки после короткой задержки (чтобы DOM успел обновиться)
+        setTimeout(() => {
+            this.addFullscreenButtonsToExistingElements();
+        }, 100);
+
+        if (this.videoSwitcher.style.display === 'block') {
+            this.updateVideoSwitcherList();
+        }
+
+        this.updateRoomStatus();
     }
 
     updateUserMediaStatus(socketId, mediaType, enabled) {
@@ -946,19 +1190,6 @@ class VideoConference {
             localIndexElement.textContent = `scr${userIndex}`;
         }
         console.log(`📝 Updated local user index to: scr${userIndex}`);
-    }
-
-    addUser(socketId, name, userIndex, videoEnabled = true, audioEnabled = true) {
-        if (socketId === this.socket.id) return;
-
-        this.userStates.set(socketId, { name, userIndex, videoEnabled, audioEnabled });
-        console.log(`👤 User joined: ${name} (scr${userIndex})`);
-
-        if (this.videoSwitcher.style.display === 'block') {
-            this.updateVideoSwitcherList();
-        }
-
-        this.updateRoomStatus();
     }
 
     updateUser(socketId, name, userIndex, videoEnabled, audioEnabled) {
@@ -1039,8 +1270,14 @@ class VideoConference {
         await this.consumeProducer(data, false);
     }
 
+    // ОБНОВЛЯЕМ ФУНКЦИЮ: Добавляем вызов при получении новых демонстраций
     async consumePresentation(data) {
         await this.consumeProducer(data, true);
+        
+        // Добавляем кнопки после создания элемента
+        setTimeout(() => {
+            this.addFullscreenButtonsToExistingElements();
+        }, 100);
     }
 
     async consumeProducer(data, isPresentation) {
@@ -1064,7 +1301,7 @@ class VideoConference {
                 body: JSON.stringify({
                     socketId: this.socket.id,
                     direction: 'recv',
-                    roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                    roomType: this.pageType
                 })
             });
 
@@ -1079,7 +1316,7 @@ class VideoConference {
                         body: JSON.stringify({
                             transportId: consumerTransport.id,
                             dtlsParameters,
-                            roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                            roomType: this.pageType
                         })
                     });
                     console.log(`✅ Consumer transport connected for ${producerId}`);
@@ -1101,7 +1338,7 @@ class VideoConference {
                     transportId: consumerTransport.id,
                     producerId,
                     rtpCapabilities: this.device.rtpCapabilities,
-                    roomType: this.pageType  // ДОБАВЛЯЕМ roomType
+                    roomType: this.pageType
                 })
             });
 
@@ -1142,6 +1379,7 @@ class VideoConference {
         }
     }
 
+    // ОБНОВЛЯЕМ ФУНКЦИЮ: Упрощаем создание элементов (убираем дублирование кнопок)
     createUserElement(socketId, consumer, kind, peerName, userIndex) {
         const elementId = `user-${socketId}`;
         let mediaElement = document.getElementById(elementId);
@@ -1155,6 +1393,7 @@ class VideoConference {
             mediaElement.className = 'video-wrapper peer';
             mediaElement.id = elementId;
 
+            // УБИРАЕМ кнопку из HTML - будем добавлять отдельно
             mediaElement.innerHTML = `
                 <div class="video-header">
                     <div class="video-title">${peerName}</div>
@@ -1177,8 +1416,14 @@ class VideoConference {
         }
 
         this.setupMediaElement(mediaElement, consumer, kind);
+        
+        // ДОБАВЛЯЕМ кнопку отдельно
+        setTimeout(() => {
+            this.addFullscreenButtonsToExistingElements();
+        }, 100);
     }
 
+    // ОБНОВЛЯЕМ ФУНКЦИЮ: Аналогично для демонстраций экрана
     createPresentationElement(producerId, consumer, kind, peerName, presentationIndex) {
         const elementId = `presentation-${producerId}`;
         let mediaElement = document.getElementById(elementId);
@@ -1191,6 +1436,7 @@ class VideoConference {
             const isOwn = this.socket && this.socket.id === consumer.socketId;
             const title = isOwn ? 'Your Screen Share' : `${peerName}'s Screen`;
 
+            // УБИРАЕМ кнопку из HTML - будем добавлять отдельно
             mediaElement.innerHTML = `
                 <div class="video-header">
                     <div class="video-title">${title}</div>
@@ -1209,6 +1455,11 @@ class VideoConference {
         }
 
         this.setupMediaElement(mediaElement, consumer, kind);
+        
+        // ДОБАВЛЯЕМ кнопку отдельно
+        setTimeout(() => {
+            this.addFullscreenButtonsToExistingElements();
+        }, 100);
     }
 
     setupMediaElement(mediaElement, consumer, kind) {
@@ -1523,7 +1774,6 @@ class VideoConference {
             if (!res.ok) {
                 const errorText = await res.text();
                 
-                // Обработка ошибки медиа сервера
                 if (res.status === 503) {
                     throw new Error('Media server is not ready. Please refresh the page and try again.');
                 }
@@ -1535,7 +1785,6 @@ class VideoConference {
         } catch (error) {
             console.error(`❌ Fetch error for ${url}:`, error);
             
-            // Показываем понятное сообщение об ошибке
             if (error.message.includes('Media server is not ready')) {
                 alert('Media server is starting up. Please wait a moment and try again.');
             }
