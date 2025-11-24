@@ -9,7 +9,7 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   
   // Room limits
-  maxUsers: parseInt(process.env.MAX_USERS) || 3,
+  maxUsers: parseInt(process.env.MAX_USERS) || 2,
   maxScreenShares: parseInt(process.env.MAX_SCREEN_SHARES) || 2,
   
   // Page configuration - NEW

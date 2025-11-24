@@ -3,7 +3,7 @@ const CONFIG = window.SERVER_CONFIG || {
   SOCKET_URL: window.location.origin,
   URL_PREFIX: "/zzy",
   SOCKET_PATH: "/zzy/socket.io",
-  MAX_USERS: 3,
+  MAX_USERS: 2,
   MAX_SCREEN_SHARES: 2,
   PAGE_TYPE: "webcam1"
 };
@@ -157,25 +157,6 @@ class VideoConference {
 
             newWindow.document.body.appendChild(vid);
 
-            const closeBtn = newWindow.document.createElement("button");
-            closeBtn.textContent = "✕";
-            closeBtn.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: rgba(0,0,0,0.7);
-                color: white;
-                border: none;
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                font-size: 20px;
-                cursor: pointer;
-                z-index: 1000;
-            `;
-            closeBtn.onclick = () => newWindow.close();
-            newWindow.document.body.appendChild(closeBtn);
-
             newWindow.onbeforeunload = () => {
                 console.log("✅ Fullscreen video window closed");
             };
@@ -268,7 +249,7 @@ class VideoConference {
                         padding: 5px 8px;
                         cursor: pointer;
                         font-size: 14px;
-                        margin-left: 5px;
+                        margin-right: 5px;
                     `;
                     fullscreenBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -299,7 +280,7 @@ class VideoConference {
                     padding: 5px 8px;
                     cursor: pointer;
                     font-size: 14px;
-                    margin-left: 5px;
+                    margin-lef: 5px;
                 `;
                 fullscreenBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -371,7 +352,36 @@ class VideoConference {
             }
         });
 
+        // 🔥 УДАЛЯЕМ ВСЕ СУЩЕСТВУЮЩИЕ НЕРАБОЧИЕ КНОПКИ
+        const existingButtons = document.querySelectorAll('#switchVideoBtn, .switch-video-btn');
+        console.log(`🔍 Found ${existingButtons.length} existing switch buttons`);
+        
+        existingButtons.forEach(btn => {
+            console.log('🗑️ Removing existing button:', btn);
+            btn.remove();
+        });
+
+        // 🔥 СОЗДАЕМ ТОЛЬКО ОДНУ РАБОЧУЮ КНОПКУ
         this.addSwitchVideoButton();
+    }
+
+    addSwitchVideoButton() {
+        const mediaControls = document.getElementById('mediaControls');
+        
+        // 🔥 ПРОВЕРКА НА СЛУЧАЙ ПОВТОРНОГО ВЫЗОВА
+        if (document.getElementById('switchVideoBtn')) {
+            console.log("✅ Switch button already exists, skipping");
+            return;
+        }
+
+        const switchBtn = document.createElement('button');
+        switchBtn.className = 'control-btn switch-video-btn';
+        switchBtn.id = 'switchVideoBtn';
+        switchBtn.innerHTML = '🔄 Rearrange Videos';
+        switchBtn.addEventListener('click', () => this.toggleVideoSwitcher());
+
+        mediaControls.appendChild(switchBtn);
+        console.log("✅ Working switch video button created");
     }
 
     addSwitchVideoButton() {
